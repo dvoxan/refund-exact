@@ -22,6 +22,7 @@
 <s-page heading="Refund Exact" inline-size="base">
 
   <s-banner id="error" tone="critical" dismissible hidden></s-banner>
+  <s-banner id="okBanner" tone="success" heading="Refund complete" dismissible hidden></s-banner>
 
   <s-section heading="Find an order">
     <s-stack gap="base">
@@ -152,8 +153,9 @@
 
   function qtyInputs() { return Array.prototype.slice.call(document.querySelectorAll('#lines s-number-field')); }
 
-  async function lookup(name) {
+  async function lookup(name, keepOk) {
     showError('');
+    if (!keepOk) $('okBanner').hidden = true;
     $('resultSec').hidden = true;
     busy($('lookupBtn'), true);
     try {
@@ -248,12 +250,22 @@
     showError('');
     busy($('confirmRefundBtn'), true);
     try {
+      var notifySent = !!$('notifyBox').checked;
       var r = await api('/api/refund', { method: 'POST', body: JSON.stringify({ name: order.name, picks: lastPicks, notify: !!$('notifyBox').checked, restock: !$('restockWrap').hidden && !!$('restockBox').checked, locationId: $('locSelect').value || '', key: refundKey }) });
       $('refundModal').hideOverlay ? $('refundModal').hideOverlay() : $('refundModal').removeAttribute('open');
       toast('Refunded ' + fmt(r.amount, r.currency) + (r.restocked ? ' and restocked' : ''));
       $('refundBtn').disabled = true;
       $('refundBtn').textContent = 'Refunded';
-      await lookup(order.name);
+      var doneName = order.name;
+      var statusText = r.status ? String(r.status).toLowerCase().replace(/_/g, ' ') : '';
+      await lookup(doneName, true);
+      $('okBanner').textContent = 'Refunded ' + fmt(r.amount, r.currency) + ' on order ' + doneName + '.' +
+        (statusText ? ' Shopify now shows the order as ' + statusText + '.' : '') +
+        (r.totalRefunded ? ' Total refunded so far: ' + fmt(r.totalRefunded, r.currency) + '.' : '') +
+        (r.restocked ? ' Returned items were added back to inventory.' : '') +
+        (notifySent ? ' The customer was emailed.' : '');
+      $('okBanner').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       showError('');
     } catch (err) {
       $('refundModal').hideOverlay && $('refundModal').hideOverlay();
