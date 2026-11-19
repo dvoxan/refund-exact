@@ -54,6 +54,8 @@ app.use((req, res, next) => {
 
 app.get('/healthz', (req, res) => res.send('ok'));
 
+app.get('/privacy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
+
 app.get('/', (req, res) => {
   const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
     .replace(/__SHOPIFY_API_KEY__/g, CLIENT_ID || '');
