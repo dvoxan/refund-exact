@@ -110,6 +110,12 @@
     <s-paragraph>You are about to refund <b id="mAmount"></b> to the customer's original payment method on <span id="mOrder"></span>.</s-paragraph>
     <s-text color="subdued" id="mItems"></s-text>
     <s-checkbox id="notifyBox" label="Send the customer a refund notification email"></s-checkbox>
+    <div id="restockWrap" hidden>
+      <s-stack gap="small">
+        <s-checkbox id="restockBox" label="Put returned items back in inventory" checked></s-checkbox>
+        <s-select id="locSelect" label="Return to location"></s-select>
+      </s-stack>
+    </div>
     <s-banner tone="warning">Refunds cannot be undone.</s-banner>
   </s-stack>
   <s-button slot="secondary-actions" commandFor="refundModal" command="--hide">Cancel</s-button>
@@ -242,9 +248,9 @@
     showError('');
     busy($('confirmRefundBtn'), true);
     try {
-      var r = await api('/api/refund', { method: 'POST', body: JSON.stringify({ name: order.name, picks: lastPicks, notify: !!$('notifyBox').checked, key: refundKey }) });
+      var r = await api('/api/refund', { method: 'POST', body: JSON.stringify({ name: order.name, picks: lastPicks, notify: !!$('notifyBox').checked, restock: !$('restockWrap').hidden && !!$('restockBox').checked, locationId: $('locSelect').value || '', key: refundKey }) });
       $('refundModal').hideOverlay ? $('refundModal').hideOverlay() : $('refundModal').removeAttribute('open');
-      toast('Refunded ' + fmt(r.amount, r.currency));
+      toast('Refunded ' + fmt(r.amount, r.currency) + (r.restocked ? ' and restocked' : ''));
       $('refundBtn').disabled = true;
       $('refundBtn').textContent = 'Refunded';
       await lookup(order.name);
@@ -254,6 +260,17 @@
       showError(err.message);
     } finally { busy($('confirmRefundBtn'), false); }
   });
+
+  // Inventory locations (optional: restock controls stay hidden if this cannot load)
+  (async function () {
+    try {
+      var d = await api('/api/locations');
+      if (!d.locations || !d.locations.length) return;
+      $('locSelect').innerHTML = d.locations.map(function (l) { return '<s-option value="' + esc(l.id) + '">' + esc(l.name) + '</s-option>'; }).join('');
+      $('locSelect').value = d.locations[0].id;
+      $('restockWrap').hidden = false;
+    } catch (e) { /* ignore */ }
+  })();
 
   // Recent orders (optional: hides itself if it cannot load)
   (async function () {
