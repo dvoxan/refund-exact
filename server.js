@@ -242,6 +242,8 @@ mutation refundCreate($input: RefundInput!) {
   }
 }`;
 
+const VERIFY_QUERY = `query($id: ID!) { order(id: $id) { displayFinancialStatus totalRefundedSet { shopMoney { amount } } } }`;
+
 const doneKeys = new Map();
 
 app.post('/api/refund', async (req, res) => {
@@ -287,7 +289,12 @@ app.post('/api/refund', async (req, res) => {
     if (errs && errs.length) throw Object.assign(new Error(errs.map((x) => x.message).join(' ')), { code: 400 });
 
     const restocked = locOk ? (picks || []).filter((p) => Number(p.qty) > 0 && restockable[p.id]).length : 0;
-    const out = { ok: true, restocked, refundId: data.refundCreate.refund.id, amount: calc.refundTotal, currency: order.currency };
+    let verified = {};
+    try {
+      const vr = await gqlForShop(req, VERIFY_QUERY, { id: order.id });
+      verified = { status: vr.order.displayFinancialStatus, totalRefunded: vr.order.totalRefundedSet.shopMoney.amount };
+    } catch (e) { /* the refund itself already succeeded */ }
+    const out = { ok: true, restocked, ...verified, refundId: data.refundCreate.refund.id, amount: calc.refundTotal, currency: order.currency };
     doneKeys.set(key, out);
     if (doneKeys.size > 500) doneKeys.delete(doneKeys.keys().next().value);
     res.json(out);
