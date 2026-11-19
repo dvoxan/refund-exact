@@ -228,6 +228,7 @@ query($id: ID!) {
       id kind status gateway
       amountSet { shopMoney { amount } }
     }
+    lineItems(first: 100) { nodes { id restockable } }
     totalRefundedSet { shopMoney { amount } }
     totalReceivedSet { shopMoney { amount } }
   }
@@ -245,7 +246,7 @@ const doneKeys = new Map();
 
 app.post('/api/refund', async (req, res) => {
   try {
-    const { name, picks, notify, key } = req.body || {};
+    const { name, picks, notify, key, restock, locationId } = req.body || {};
     if (!/^[A-Za-z0-9-]{8,64}$/.test(String(key || ''))) throw Object.assign(new Error('Missing or invalid request key'), { code: 400 });
     if (doneKeys.has(key)) return res.json(doneKeys.get(key));
 
@@ -264,13 +265,17 @@ app.post('/api/refund', async (req, res) => {
       throw Object.assign(new Error('This refund is more than what is left to refund on the order.'), { code: 400 });
     }
 
+    const restockable = {};
+    txData.order.lineItems.nodes.forEach((l) => { restockable[l.id] = l.restockable; });
+    const locOk = restock && /^gid:\/\/shopify\/Location\/\d+$/.test(String(locationId || ''));
     const input = {
       orderId: order.id,
       currency: order.currency,
       notify: !!notify,
       note: 'Exact partial refund (Refund Exact)',
       refundLineItems: (picks || []).filter((p) => Number(p.qty) > 0).map((p) => ({
-        lineItemId: p.id, quantity: Number(p.qty), restockType: 'NO_RESTOCK',
+        lineItemId: p.id, quantity: Number(p.qty),
+        ...(locOk && restockable[p.id] ? { restockType: 'RETURN', locationId } : { restockType: 'NO_RESTOCK' }),
       })),
       transactions: [{
         orderId: order.id, parentId: parent.id, gateway: parent.gateway, kind: 'REFUND', amount: calc.refundTotal,
@@ -281,10 +286,20 @@ app.post('/api/refund', async (req, res) => {
     const errs = data.refundCreate.userErrors;
     if (errs && errs.length) throw Object.assign(new Error(errs.map((x) => x.message).join(' ')), { code: 400 });
 
-    const out = { ok: true, refundId: data.refundCreate.refund.id, amount: calc.refundTotal, currency: order.currency };
+    const restocked = locOk ? (picks || []).filter((p) => Number(p.qty) > 0 && restockable[p.id]).length : 0;
+    const out = { ok: true, restocked, refundId: data.refundCreate.refund.id, amount: calc.refundTotal, currency: order.currency };
     doneKeys.set(key, out);
     if (doneKeys.size > 500) doneKeys.delete(doneKeys.keys().next().value);
     res.json(out);
+  } catch (e) { sendError(res, e); }
+});
+
+const LOC_QUERY = `query { locations(first: 50) { nodes { id name isActive } } }`;
+
+app.get('/api/locations', async (req, res) => {
+  try {
+    const data = await gqlForShop(req, LOC_QUERY, {});
+    res.json({ locations: data.locations.nodes.filter((l) => l.isActive).map((l) => ({ id: l.id, name: l.name })) });
   } catch (e) { sendError(res, e); }
 });
 
