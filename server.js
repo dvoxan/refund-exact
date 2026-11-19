@@ -234,8 +234,8 @@ query($id: ID!) {
 }`;
 
 const REFUND_MUTATION = (key) => `
-mutation refundCreate($input: RefundInput!) @idempotent(key: "${key}") {
-  refundCreate(input: $input) {
+mutation refundCreate($input: RefundInput!) {
+  refundCreate(input: $input) @idempotent(key: "${key}") {
     refund { id totalRefundedSet { shopMoney { amount } } }
     userErrors { field message }
   }
