@@ -96,13 +96,25 @@
       </s-stack>
 
       <s-stack direction="inline" gap="small" alignItems="center">
-        <s-button id="copyBtn" variant="primary" icon="clipboard">Copy amount</s-button>
-        <s-text color="subdued">Shipping is not included. In Shopify, open the order, choose Refund, and type this amount in the refund box.</s-text>
+        <s-button id="refundBtn" variant="primary" commandFor="refundModal" command="--show">Refund now</s-button>
+        <s-button id="copyBtn" variant="secondary" icon="clipboard">Copy amount</s-button>
+        <s-text color="subdued">Shipping is not included. Prefer to do it yourself? Copy the amount and enter it on Shopify's refund screen.</s-text>
       </s-stack>
     </s-stack>
   </s-section>
 
 </s-page>
+
+<s-modal id="refundModal" heading="Refund this amount?">
+  <s-stack gap="base">
+    <s-paragraph>You are about to refund <b id="mAmount"></b> to the customer's original payment method on <span id="mOrder"></span>.</s-paragraph>
+    <s-text color="subdued" id="mItems"></s-text>
+    <s-checkbox id="notifyBox" label="Send the customer a refund notification email"></s-checkbox>
+    <s-banner tone="warning">Refunds cannot be undone.</s-banner>
+  </s-stack>
+  <s-button slot="secondary-actions" commandFor="refundModal" command="--hide">Cancel</s-button>
+  <s-button slot="primary-action" variant="primary" id="confirmRefundBtn">Refund now</s-button>
+</s-modal>
 
 <script>
 (function () {
@@ -201,6 +213,7 @@
       $('rTaxLabel').textContent = r.taxesIncluded ? 'Tax (already inside the item prices)' : 'Tax';
       $('rTax').textContent = fmt(r.tax);
       lastTotal = r.refundTotal;
+      $('refundBtn').disabled = false; $('refundBtn').textContent = 'Refund now';
       $('resultSec').hidden = false;
       $('resultSec').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) { showError(err.message); }
@@ -210,6 +223,36 @@
   $('copyBtn').addEventListener('click', async function () {
     try { await navigator.clipboard.writeText(lastTotal); toast('Copied ' + fmt(lastTotal)); }
     catch (e) { showError('Copy did not work. Select the refund total and copy it by hand.'); }
+  });
+
+
+  var lastPicks = [];
+  var refundKey = '';
+  $('refundBtn').addEventListener('click', function () {
+    lastPicks = qtyInputs().map(function (i) { return { id: i.getAttribute('data-id'), qty: Number(i.value) || 0 }; }).filter(function (p) { return p.qty > 0; });
+    refundKey = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
+    $('mAmount').textContent = fmt(lastTotal);
+    $('mOrder').textContent = order.name;
+    $('mItems').textContent = lastPicks.map(function (p) {
+      var li = order.lineItems.filter(function (l) { return l.id === p.id; })[0];
+      return p.qty + ' \u00d7 ' + (li ? li.title : 'item');
+    }).join(', ');
+  });
+  $('confirmRefundBtn').addEventListener('click', async function () {
+    showError('');
+    busy($('confirmRefundBtn'), true);
+    try {
+      var r = await api('/api/refund', { method: 'POST', body: JSON.stringify({ name: order.name, picks: lastPicks, notify: !!$('notifyBox').checked, key: refundKey }) });
+      $('refundModal').hideOverlay ? $('refundModal').hideOverlay() : $('refundModal').removeAttribute('open');
+      toast('Refunded ' + fmt(r.amount, r.currency));
+      $('refundBtn').disabled = true;
+      $('refundBtn').textContent = 'Refunded';
+      await lookup(order.name);
+      showError('');
+    } catch (err) {
+      $('refundModal').hideOverlay && $('refundModal').hideOverlay();
+      showError(err.message);
+    } finally { busy($('confirmRefundBtn'), false); }
   });
 
   // Recent orders (optional: hides itself if it cannot load)
