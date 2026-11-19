@@ -33,9 +33,13 @@ function calculateRefund(order, picks) {
     const orig = cents(li.originalTotal);
     const disc = cents(li.discountedTotal);
     const tax = cents(li.taxTotal);
-    const lineNet = shareCents(disc, qty, li.quantity); // what the customer really paid for these units (pre-tax if tax is added on top)
-    const lineTax = shareCents(tax, qty, li.quantity);
-    const lineOrig = shareCents(orig, qty, li.quantity);
+    // Cumulative share: what is owed for (already refunded + this return) minus what was owed for the
+    // already refunded units. Keeps repeated partial refunds adding up to the exact line total.
+    const prior = Math.max(0, li.quantity - li.refundableQuantity);
+    const part = (total) => shareCents(total, prior + qty, li.quantity) - shareCents(total, prior, li.quantity);
+    const lineNet = part(disc); // what the customer really paid for these units (pre-tax if tax is added on top)
+    const lineTax = part(tax);
+    const lineOrig = part(orig);
     netC += lineNet;
     taxC += lineTax;
     discountKeptC += lineOrig - lineNet;
