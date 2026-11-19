@@ -5,80 +5,124 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="shopify-api-key" content="__SHOPIFY_API_KEY__">
 <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+<script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
 <title>Refund Exact</title>
 <style>
-  :root { --ink:#1a1a1a; --muted:#616161; --line:#e1e1e1; --accent:#005bd3; --ok:#0c5132; --okbg:#cdfee1; --bad:#8e1f0b; --badbg:#fee9e5; }
-  * { box-sizing: border-box; }
-  body { margin:0; padding:16px; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:#f1f1f1; }
-  main { max-width:760px; margin:0 auto; display:grid; gap:16px; }
-  .card { background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 1px 0 rgba(0,0,0,.08); }
-  h1 { font-size:20px; margin:0 0 4px; }
-  h2 { font-size:15px; margin:0 0 12px; }
-  p { margin:0; color:var(--muted); }
-  .row { display:flex; gap:8px; margin-top:12px; }
-  input[type=text], input[type=number] { font:inherit; padding:8px 10px; border:1px solid #8a8a8a; border-radius:8px; }
-  input[type=text] { flex:1; }
-  input[type=number] { width:72px; }
-  button { font:inherit; padding:8px 16px; border:0; border-radius:8px; background:#303030; color:#fff; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:default; }
-  button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  table { width:100%; border-collapse:collapse; }
-  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  th { font-weight:600; color:var(--muted); font-size:12px; }
-  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
-  .msg { padding:10px 12px; border-radius:8px; margin-top:12px; }
-  .msg.err { background:var(--badbg); color:var(--bad); }
-  .total { display:flex; justify-content:space-between; align-items:baseline; font-size:18px; font-weight:650; margin-top:12px; }
-  .sub { display:flex; justify-content:space-between; color:var(--muted); margin-top:4px; }
-  .hint { font-size:13px; color:var(--muted); margin-top:8px; }
-  .good { display:inline-block; background:var(--okbg); color:var(--ok); padding:2px 8px; border-radius:99px; font-size:12px; }
-  [hidden] { display:none !important; }
+  [hidden] { display: none !important; }
+  .big { display: block; font-size: 38px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .strike { text-decoration: line-through; opacity: .6; }
+  .num { font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; gap: 16px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .step b { display: block; margin-bottom: 2px; }
+  .muted { color: #616161; }
 </style>
 </head>
 <body>
-<main>
-  <div class="card">
-    <h1>Refund Exact</h1>
-    <p>Find the exact refund for a partial return on a discounted order. Enter the order number, pick what is coming back, then copy the amount into Shopify's refund screen.</p>
-    <form class="row" id="lookup">
-      <input type="text" id="orderName" placeholder="Order number, for example 1001" aria-label="Order number" autocomplete="off">
-      <button type="submit" id="lookupBtn">Look up order</button>
-    </form>
-    <div class="msg err" id="error" role="alert" hidden></div>
-  </div>
+<s-page heading="Refund Exact" inline-size="base">
 
-  <div class="card" id="orderCard" hidden>
-    <h2 id="orderTitle"></h2>
-    <table>
-      <thead><tr><th>Item</th><th class="num">Paid per unit</th><th class="num">Left to refund</th><th class="num">Returning</th></tr></thead>
-      <tbody id="lines"></tbody>
-    </table>
-    <div class="row"><button id="calcBtn" type="button">Calculate refund</button></div>
-  </div>
+  <s-banner id="error" tone="critical" dismissible hidden></s-banner>
 
-  <div class="card" id="resultCard" hidden>
-    <h2>Refund to enter in Shopify</h2>
-    <div id="resultLines"></div>
-    <div class="sub"><span>Items, after discounts</span><span id="rItems"></span></div>
-    <div class="sub"><span id="rTaxLabel">Tax</span><span id="rTax"></span></div>
-    <div class="sub"><span>Discount you keep on these items</span><span id="rDisc"></span></div>
-    <div class="total"><span>Refund total</span><span id="rTotal"></span></div>
-    <div class="row"><button id="copyBtn" type="button">Copy amount</button><span id="copied" class="good" hidden>Copied</span></div>
-    <p class="hint">Shipping is not included. In Shopify, open the order, choose Refund, and type this amount in the refund amount box.</p>
-  </div>
-</main>
+  <s-section heading="Find an order">
+    <s-stack gap="base">
+      <s-paragraph>Get the exact amount to refund when a customer returns part of a discounted order.</s-paragraph>
+      <s-stack direction="inline" gap="small" alignItems="end">
+        <s-text-field id="orderName" label="Order number" prefix="#" placeholder="1001" autocomplete="off"></s-text-field>
+        <s-button id="lookupBtn" variant="primary">Look up order</s-button>
+      </s-stack>
+      <s-stack id="recentWrap" gap="small" hidden>
+        <s-text color="subdued">Recent orders</s-text>
+        <s-stack id="recent" direction="inline" gap="small"></s-stack>
+      </s-stack>
+    </s-stack>
+  </s-section>
+
+  <s-section id="howSec" heading="How it works">
+    <div class="steps">
+      <div class="step"><b>1. Pick the order</b><span class="muted">Type the number or tap a recent order.</span></div>
+      <div class="step"><b>2. Choose what is coming back</b><span class="muted">Set the quantity for each item.</span></div>
+      <div class="step"><b>3. Copy the exact amount</b><span class="muted">Paste it into Shopify's refund screen.</span></div>
+    </div>
+  </s-section>
+
+  <s-section id="orderSec" heading="Order" hidden>
+    <s-stack gap="base">
+      <s-table id="linesTable">
+        <s-table-header-row>
+          <s-table-header listSlot="primary">Item</s-table-header>
+          <s-table-header format="numeric">You charged</s-table-header>
+          <s-table-header format="numeric">Left to refund</s-table-header>
+          <s-table-header>Returning</s-table-header>
+        </s-table-header-row>
+        <s-table-body id="lines"></s-table-body>
+      </s-table>
+      <s-stack direction="inline" gap="small">
+        <s-button id="calcBtn" variant="primary">Calculate refund</s-button>
+        <s-button id="allBtn" variant="secondary">Return everything</s-button>
+        <s-button id="clearBtn" variant="tertiary">Clear</s-button>
+      </s-stack>
+    </s-stack>
+  </s-section>
+
+  <s-section id="resultSec" heading="Exact refund" hidden>
+    <s-stack gap="large">
+      <div class="steps">
+        <s-box padding="base" borderRadius="base" background="subdued">
+          <s-text color="subdued">List price of these items</s-text>
+          <span class="big strike num" id="rList"></span>
+          <s-text color="subdued">What you would refund if you ignored the discount</s-text>
+        </s-box>
+        <s-box padding="base" borderRadius="base" background="subdued" border="base">
+          <s-text color="subdued">Refund to enter in Shopify</s-text>
+          <span class="big num" id="rTotal"></span>
+          <s-badge id="rSave" tone="success"></s-badge>
+        </s-box>
+      </div>
+
+      <s-table>
+        <s-table-header-row>
+          <s-table-header listSlot="primary">Returned item</s-table-header>
+          <s-table-header format="numeric">List price</s-table-header>
+          <s-table-header format="numeric">Exact refund</s-table-header>
+        </s-table-header-row>
+        <s-table-body id="resultLines"></s-table-body>
+      </s-table>
+
+      <s-stack gap="small-200">
+        <div class="row"><span class="muted">Items after discount</span><span class="num" id="rItems"></span></div>
+        <div class="row"><span class="muted" id="rTaxLabel">Tax</span><span class="num" id="rTax"></span></div>
+        <s-divider></s-divider>
+        <div class="row"><b>Refund total</b><b class="num" id="rTotal2"></b></div>
+      </s-stack>
+
+      <s-stack direction="inline" gap="small" alignItems="center">
+        <s-button id="copyBtn" variant="primary" icon="clipboard">Copy amount</s-button>
+        <s-text color="subdued">Shipping is not included. In Shopify, open the order, choose Refund, and type this amount in the refund box.</s-text>
+      </s-stack>
+    </s-stack>
+  </s-section>
+
+</s-page>
 
 <script>
 (function () {
   var order = null;
+  var lastTotal = '';
   var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 
-  function fmt(amount) {
-    var cur = order && order.currency;
+  function fmt(amount, cur) {
+    cur = cur || (order && order.currency) || 'USD';
     try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }).format(Number(amount)); }
-    catch (e) { return amount; }
+    catch (e) { return String(amount); }
   }
-  function showError(msg) { $('error').textContent = msg; $('error').hidden = !msg; }
+  function showError(msg) {
+    var b = $('error');
+    if (!msg) { b.hidden = true; return; }
+    b.textContent = msg; b.hidden = false;
+  }
+  function toast(msg) { try { shopify.toast.show(msg); } catch (e) { /* optional */ } }
+  function busy(btn, on) { if (on) btn.setAttribute('loading', ''); else btn.removeAttribute('loading'); btn.disabled = !!on; }
 
   async function api(path, options) {
     var token = await shopify.idToken();
@@ -88,82 +132,102 @@
     return data;
   }
 
-  $('lookup').addEventListener('submit', async function (e) {
-    e.preventDefault();
+  function qtyInputs() { return Array.prototype.slice.call(document.querySelectorAll('#lines s-number-field')); }
+
+  async function lookup(name) {
     showError('');
-    $('resultCard').hidden = true;
-    $('lookupBtn').disabled = true;
+    $('resultSec').hidden = true;
+    busy($('lookupBtn'), true);
     try {
-      order = await api('/api/order?name=' + encodeURIComponent($('orderName').value));
-      $('orderTitle').textContent = 'Order ' + order.name + ' (' + order.status.toLowerCase().replace(/_/g, ' ') + ')';
-      var body = $('lines');
-      body.textContent = '';
+      order = await api('/api/order?name=' + encodeURIComponent(name));
+      $('orderName').value = String(order.name).replace(/^#/, '');
+      $('orderSec').setAttribute('heading', 'Order ' + order.name + ' · ' + order.status.toLowerCase().replace(/_/g, ' '));
+      var html = '';
       order.lineItems.forEach(function (li) {
         var unit = li.quantity ? (Number(li.discountedTotal) / li.quantity).toFixed(2) : '0.00';
-        var tr = document.createElement('tr');
         var title = li.title + (li.variantTitle ? ' (' + li.variantTitle + ')' : '');
-        var cells = [title, fmt(unit), String(li.refundableQuantity)];
-        cells.forEach(function (c, i) {
-          var td = document.createElement('td');
-          if (i > 0) td.className = 'num';
-          td.textContent = c;
-          tr.appendChild(td);
-        });
-        var td = document.createElement('td');
-        td.className = 'num';
-        var input = document.createElement('input');
-        input.type = 'number'; input.min = 0; input.max = li.refundableQuantity; input.value = 0;
-        input.dataset.id = li.id;
-        input.setAttribute('aria-label', 'Quantity returning: ' + title);
-        input.disabled = li.refundableQuantity === 0;
-        td.appendChild(input);
-        tr.appendChild(td);
-        body.appendChild(tr);
+        html += '<s-table-row>' +
+          '<s-table-cell>' + esc(title) + '</s-table-cell>' +
+          '<s-table-cell>' + esc(fmt(unit)) + ' each</s-table-cell>' +
+          '<s-table-cell>' + esc(li.refundableQuantity) + '</s-table-cell>' +
+          '<s-table-cell><s-number-field label="Quantity returning: ' + esc(title) + '" labelAccessibilityVisibility="exclusive" min="0" max="' + esc(li.refundableQuantity) + '" step="1" value="0" data-id="' + esc(li.id) + '" data-max="' + esc(li.refundableQuantity) + '"' + (li.refundableQuantity === 0 ? ' disabled' : '') + '></s-number-field></s-table-cell>' +
+          '</s-table-row>';
       });
-      $('orderCard').hidden = false;
+      $('lines').innerHTML = html;
+      $('orderSec').hidden = false;
+      $('howSec').hidden = true;
     } catch (err) {
-      $('orderCard').hidden = true;
+      $('orderSec').hidden = true;
       showError(err.message);
-    } finally { $('lookupBtn').disabled = false; }
+    } finally { busy($('lookupBtn'), false); }
+  }
+
+  $('lookupBtn').addEventListener('click', function () { lookup($('orderName').value); });
+  $('orderName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lookup($('orderName').value); } });
+
+  $('allBtn').addEventListener('click', function () {
+    qtyInputs().forEach(function (i) { i.value = String(i.getAttribute('data-max')); });
+  });
+  $('clearBtn').addEventListener('click', function () {
+    qtyInputs().forEach(function (i) { i.value = '0'; });
+    $('resultSec').hidden = true;
   });
 
   $('calcBtn').addEventListener('click', async function () {
     showError('');
-    var picks = Array.prototype.map.call(document.querySelectorAll('#lines input'), function (i) {
-      return { id: i.dataset.id, qty: Number(i.value) || 0 };
+    var picks = qtyInputs().map(function (i) {
+      return { id: i.getAttribute('data-id'), qty: Number(i.value) || 0 };
     }).filter(function (p) { return p.qty > 0; });
-    if (!picks.length) { showError('Enter how many of each item are coming back.'); return; }
-    $('calcBtn').disabled = true;
+    if (!picks.length) { showError('Set how many of each item are coming back, then calculate.'); return; }
+    busy($('calcBtn'), true);
     try {
       var r = await api('/api/calc', { method: 'POST', body: JSON.stringify({ name: order.name, picks: picks }) });
-      var rl = $('resultLines');
-      rl.textContent = '';
+      var list = 0;
+      var rows = '';
       r.lines.forEach(function (l) {
-        var d = document.createElement('div');
-        d.className = 'sub';
-        var a = document.createElement('span');
-        a.textContent = l.qty + ' x ' + l.title + (l.variantTitle ? ' (' + l.variantTitle + ')' : '');
-        var b = document.createElement('span');
-        b.textContent = fmt(l.paid);
-        d.appendChild(a); d.appendChild(b);
-        rl.appendChild(d);
+        list += Number(l.listPrice);
+        rows += '<s-table-row><s-table-cell>' + esc(l.qty + ' × ' + l.title + (l.variantTitle ? ' (' + l.variantTitle + ')' : '')) + '</s-table-cell>' +
+          '<s-table-cell>' + esc(fmt(l.listPrice)) + '</s-table-cell>' +
+          '<s-table-cell>' + esc(fmt(l.paid)) + '</s-table-cell></s-table-row>';
       });
+      $('resultLines').innerHTML = rows;
+      $('rList').textContent = fmt(list.toFixed(2));
+      $('rTotal').textContent = fmt(r.refundTotal);
+      $('rTotal2').textContent = fmt(r.refundTotal);
+      var kept = Number(r.discountShare);
+      $('rSave').textContent = kept > 0 ? 'Discount share kept: ' + fmt(r.discountShare) : 'No discount on these items';
+      $('rSave').setAttribute('tone', kept > 0 ? 'success' : 'neutral');
       $('rItems').textContent = fmt(r.itemsPaid);
       $('rTaxLabel').textContent = r.taxesIncluded ? 'Tax (already inside the item prices)' : 'Tax';
       $('rTax').textContent = fmt(r.tax);
-      $('rDisc').textContent = fmt(r.discountShare);
-      $('rTotal').textContent = fmt(r.refundTotal);
-      $('resultCard').dataset.total = r.refundTotal;
-      $('copied').hidden = true;
-      $('resultCard').hidden = false;
+      lastTotal = r.refundTotal;
+      $('resultSec').hidden = false;
+      $('resultSec').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) { showError(err.message); }
-    finally { $('calcBtn').disabled = false; }
+    finally { busy($('calcBtn'), false); }
   });
 
   $('copyBtn').addEventListener('click', async function () {
-    try { await navigator.clipboard.writeText($('resultCard').dataset.total); $('copied').hidden = false; }
-    catch (e) { showError('Copy did not work. Select the total and copy it by hand.'); }
+    try { await navigator.clipboard.writeText(lastTotal); toast('Copied ' + fmt(lastTotal)); }
+    catch (e) { showError('Copy did not work. Select the refund total and copy it by hand.'); }
   });
+
+  // Recent orders (optional: hides itself if it cannot load)
+  (async function () {
+    try {
+      var d = await api('/api/recent');
+      if (!d.orders || !d.orders.length) return;
+      var wrap = $('recent');
+      d.orders.forEach(function (o) {
+        var b = document.createElement('s-button');
+        b.setAttribute('variant', 'secondary');
+        b.textContent = o.name + ' · ' + fmt(o.total, o.currency) + (o.discounted ? ' · discounted' : '');
+        b.addEventListener('click', function () { lookup(o.name); });
+        wrap.appendChild(b);
+      });
+      $('recentWrap').hidden = false;
+    } catch (e) { /* ignore */ }
+  })();
 })();
 </script>
 </body>
