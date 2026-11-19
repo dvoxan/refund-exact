@@ -221,4 +221,77 @@ app.post('/api/calc', async (req, res) => {
   } catch (e) { sendError(res, e); }
 });
 
+const TX_QUERY = `
+query($id: ID!) {
+  order(id: $id) {
+    transactions(first: 50) {
+      id kind status gateway
+      amountSet { shopMoney { amount } }
+    }
+    totalRefundedSet { shopMoney { amount } }
+    totalReceivedSet { shopMoney { amount } }
+  }
+}`;
+
+const REFUND_MUTATION = (idem) => `
+mutation refundCreate($input: RefundInput!${idem ? ', $key: String!' : ''}) ${idem ? '@idempotent(key: $key)' : ''} {
+  refundCreate(input: $input) {
+    refund { id totalRefundedSet { shopMoney { amount } } }
+    userErrors { field message }
+  }
+}`;
+
+const doneKeys = new Map();
+
+app.post('/api/refund', async (req, res) => {
+  try {
+    const { name, picks, notify, key } = req.body || {};
+    if (!key || typeof key !== 'string') throw Object.assign(new Error('Missing request key'), { code: 400 });
+    if (doneKeys.has(key)) return res.json(doneKeys.get(key));
+
+    const order = await loadOrder(req, name);
+    const calc = calculateRefund(order, picks || []);
+    const amount = Number(calc.refundTotal);
+    if (!(amount > 0)) throw Object.assign(new Error('Nothing to refund'), { code: 400 });
+
+    const txData = await gqlForShop(req, TX_QUERY, { id: order.id });
+    const txs = txData.order.transactions.filter((t) => t.status === 'SUCCESS' && (t.kind === 'SALE' || t.kind === 'CAPTURE'));
+    if (!txs.length) throw Object.assign(new Error('No paid payment found on this order to refund.'), { code: 400 });
+    const parent = txs[txs.length - 1];
+    const received = Number(txData.order.totalReceivedSet.shopMoney.amount);
+    const refunded = Number(txData.order.totalRefundedSet.shopMoney.amount);
+    if (amount > received - refunded + 0.001) {
+      throw Object.assign(new Error('This refund is more than what is left to refund on the order.'), { code: 400 });
+    }
+
+    const input = {
+      orderId: order.id,
+      currency: order.currency,
+      notify: !!notify,
+      note: 'Exact partial refund (Refund Exact)',
+      refundLineItems: (picks || []).filter((p) => Number(p.qty) > 0).map((p) => ({
+        lineItemId: p.id, quantity: Number(p.qty), restockType: 'NO_RESTOCK',
+      })),
+      transactions: [{
+        orderId: order.id, parentId: parent.id, gateway: parent.gateway, kind: 'REFUND', amount: calc.refundTotal,
+      }],
+    };
+
+    let data;
+    try {
+      data = await gqlForShop(req, REFUND_MUTATION(true), { input, key });
+    } catch (e) {
+      if (!/idempot|directive/i.test(e.message)) throw e;
+      data = await gqlForShop(req, REFUND_MUTATION(false), { input });
+    }
+    const errs = data.refundCreate.userErrors;
+    if (errs && errs.length) throw Object.assign(new Error(errs.map((x) => x.message).join(' ')), { code: 400 });
+
+    const out = { ok: true, refundId: data.refundCreate.refund.id, amount: calc.refundTotal, currency: order.currency };
+    doneKeys.set(key, out);
+    if (doneKeys.size > 500) doneKeys.delete(doneKeys.keys().next().value);
+    res.json(out);
+  } catch (e) { sendError(res, e); }
+});
+
 app.listen(PORT, () => console.log('Refund Exact listening on ' + PORT));
