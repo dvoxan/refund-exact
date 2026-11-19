@@ -233,8 +233,8 @@ query($id: ID!) {
   }
 }`;
 
-const REFUND_MUTATION = (idem) => `
-mutation refundCreate($input: RefundInput!${idem ? ', $key: String!' : ''}) ${idem ? '@idempotent(key: $key)' : ''} {
+const REFUND_MUTATION = (key) => `
+mutation refundCreate($input: RefundInput!) @idempotent(key: "${key}") {
   refundCreate(input: $input) {
     refund { id totalRefundedSet { shopMoney { amount } } }
     userErrors { field message }
@@ -246,7 +246,7 @@ const doneKeys = new Map();
 app.post('/api/refund', async (req, res) => {
   try {
     const { name, picks, notify, key } = req.body || {};
-    if (!key || typeof key !== 'string') throw Object.assign(new Error('Missing request key'), { code: 400 });
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(String(key || ''))) throw Object.assign(new Error('Missing or invalid request key'), { code: 400 });
     if (doneKeys.has(key)) return res.json(doneKeys.get(key));
 
     const order = await loadOrder(req, name);
@@ -277,13 +277,7 @@ app.post('/api/refund', async (req, res) => {
       }],
     };
 
-    let data;
-    try {
-      data = await gqlForShop(req, REFUND_MUTATION(true), { input, key });
-    } catch (e) {
-      if (!/idempot|directive/i.test(e.message)) throw e;
-      data = await gqlForShop(req, REFUND_MUTATION(false), { input });
-    }
+    const data = await gqlForShop(req, REFUND_MUTATION(key), { input });
     const errs = data.refundCreate.userErrors;
     if (errs && errs.length) throw Object.assign(new Error(errs.map((x) => x.message).join(' ')), { code: 400 });
 
