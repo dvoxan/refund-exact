@@ -119,7 +119,7 @@ query($q: String!) {
           quantity
           refundableQuantity
           originalTotalSet { shopMoney { amount } }
-          discountedTotalSet { shopMoney { amount } }
+          discountAllocations { allocatedAmountSet { shopMoney { amount } } }
           taxLines { priceSet { shopMoney { amount } } }
         }
       }
@@ -156,7 +156,11 @@ async function loadOrder(req, orderName) {
       quantity: li.quantity,
       refundableQuantity: li.refundableQuantity,
       originalTotal: li.originalTotalSet.shopMoney.amount,
-      discountedTotal: li.discountedTotalSet.shopMoney.amount,
+      // originalTotal minus every discount allocation (item-level AND order-level codes)
+      discountedTotal: (
+        Number(li.originalTotalSet.shopMoney.amount) -
+        li.discountAllocations.reduce((s, d) => s + Number(d.allocatedAmountSet.shopMoney.amount), 0)
+      ).toFixed(2),
       taxTotal: li.taxLines.reduce((s, t) => s + Number(t.priceSet.shopMoney.amount), 0),
     })),
   };
