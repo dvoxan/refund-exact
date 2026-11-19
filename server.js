@@ -173,6 +173,40 @@ function sendError(res, e) {
   res.status(typeof status === 'number' ? status : 500).json({ error: e.message || 'Something went wrong' });
 }
 
+const RECENT_QUERY = `
+query {
+  orders(first: 8, sortKey: CREATED_AT, reverse: true) {
+    nodes { name currencyCode discountCodes totalPriceSet { shopMoney { amount } } }
+  }
+}`;
+
+async function gqlForShop(req, query, variables) {
+  const { shop, idToken } = verifySession(req);
+  let accessToken = await getAccessToken(shop, idToken);
+  try {
+    return await adminGraphql(shop, accessToken, query, variables);
+  } catch (e) {
+    if (e.code !== 401) throw e;
+    delete tokens[shop];
+    accessToken = await getAccessToken(shop, idToken);
+    return adminGraphql(shop, accessToken, query, variables);
+  }
+}
+
+app.get('/api/recent', async (req, res) => {
+  try {
+    const data = await gqlForShop(req, RECENT_QUERY, {});
+    res.json({
+      orders: data.orders.nodes.map((o) => ({
+        name: o.name,
+        currency: o.currencyCode,
+        total: o.totalPriceSet.shopMoney.amount,
+        discounted: o.discountCodes.length > 0,
+      })),
+    });
+  } catch (e) { sendError(res, e); }
+});
+
 app.get('/api/order', async (req, res) => {
   try {
     res.json(await loadOrder(req, req.query.name));
